@@ -1,7 +1,5 @@
 name:                postgresql-named
 version:             0.1.0.0
--- synopsis:
--- description:
 homepage:            https://github.com/cocreature/postgresql-named#readme
 license:             BSD3
 license-file:        LICENSE
@@ -16,12 +14,13 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     Lib
-  build-depends:       base >= 4.7 && < 5
-                     , bytestring
-                     , extra
-                     , mtl
-                     , postgresql-libpq
-                     , postgresql-simple
+  build-depends:       base >= 4.9 && < 5
+                     , bytestring >= 0.10 && < 0.11
+                     , extra >= 1.5 && < 1.6
+                     , generics-sop >= 0.3 && < 0.4
+                     , mtl >= 2.2 && < 2.3
+                     , postgresql-libpq >= 0.9 && < 0.10
+                     , postgresql-simple >= 0.5 && < 0.6
   default-language:    Haskell2010
 
 source-repository head
