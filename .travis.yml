@@ -6,6 +6,13 @@
 #
 language: c
 sudo: false
+dist: trusty
+
+services:
+  - postgresql
+
+addons:
+  posgtresql: "9.6"
 
 git:
   submodules: false  # whether to recursively clone submodules

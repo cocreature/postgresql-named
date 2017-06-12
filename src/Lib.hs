@@ -1,26 +1,46 @@
-{-# LANGUAGE BangPatterns, OverloadedStrings, RecordWildCards #-}
+{-# LANGUAGE BangPatterns, DataKinds, DeriveGeneric, FlexibleContexts, GADTs, OverloadedStrings, RecordWildCards, ScopedTypeVariables, TypeOperators #-}
 module Lib
   ( fieldByName
+  , deserialize
   ) where
-import           Database.PostgreSQL.Simple.Internal
-import           Database.PostgreSQL.Simple.FromField
-import           Database.PostgreSQL.Simple.FromRow
-import           Database.PostgreSQL.Simple
-import qualified Database.PostgreSQL.LibPQ as PQ
+
+import           Control.Monad.Extra
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.ByteString (ByteString)
-import           Control.Monad.Extra
+import qualified Data.ByteString.UTF8 as BS
+import qualified Database.PostgreSQL.LibPQ as PQ
+import           Database.PostgreSQL.Simple.FromField hiding (name)
+import           Database.PostgreSQL.Simple.FromRow
+import           Database.PostgreSQL.Simple.Internal
+import           GHC.TypeLits
+import           Generics.SOP
+import qualified Generics.SOP.Type.Metadata as T
 
-data Foobar = Foobar
-  { foo :: !String
-  , bar :: !Int
-  } deriving (Show, Eq, Ord)
+deserialize :: forall a modName tyName constrName fields.
+  ( Generic a
+  , HasDatatypeInfo a
+  , All2 FromField (Code a)
+  , KnownSymbol modName
+  , KnownSymbol tyName
+  , DatatypeInfoOf a ~ 'T.ADT modName tyName '[ 'T.Record constrName fields]) => RowParser a
+deserialize = do
+  case datatypeInfo (Proxy :: Proxy a) of
+    ADT _modName _tyName constrInfos ->
+      case constrInfos of
+        (constr :* Nil) ->
+          case constr of
+            Record _name fields -> do
+              let f :: forall f. FromField f => FieldInfo f -> RowParser f
+                  f (FieldInfo name) = fieldByName fromField (BS.fromString name)
+              res <- fmap (to . SOP  . Z) $ hsequence (hcliftA (Proxy :: Proxy FromField) f fields)
+              setToLastCol
+              pure res
 
 fieldByName :: FieldParser a -> ByteString -> RowParser a
 fieldByName fieldP name =
   RP $ do
-    r@Row {..} <- ask
+    Row {..} <- ask
     ncols <- lift (lift (liftConversion (PQ.nfields rowresult)))
     matchingCol <-
       (lift . lift . liftConversion) $
@@ -29,11 +49,12 @@ fieldByName fieldP name =
         [PQ.Col 0 .. ncols - 1]
     case matchingCol of
       Nothing -> error "no such column"
-      Just col -> (lift . lift) $ do
-        liftConversion (print col)
-        oid <- liftConversion (PQ.ftype rowresult col)
-        val <- liftConversion (PQ.getvalue rowresult row col)
-        fieldP (Field rowresult col oid) val
+      Just col ->
+        (lift . lift) $ do
+          liftConversion (print col)
+          oid <- liftConversion (PQ.ftype rowresult col)
+          val <- liftConversion (PQ.getvalue rowresult row col)
+          fieldP (Field rowresult col oid) val
 
 setToLastCol :: RowParser ()
 setToLastCol =
@@ -41,18 +62,3 @@ setToLastCol =
     Row {..} <- ask
     ncols <- (lift . lift . liftConversion) (PQ.nfields rowresult)
     put ncols
-
-instance FromRow Foobar where
-  fromRow = do
-    foo <- fieldByName fromField "foo"
-    bar <- fieldByName fromField "bar"
-    setToLastCol
-    pure (Foobar foo bar)
-
-test :: IO ()
-test = do
-  conn <-
-    connectPostgreSQL "host=localhost port=5432 user=postgres dbname=postgres"
-  [res] <- query_ conn "select 1 as bar, 'abc'::text as foo"
-  print (res :: Foobar)
-  pure ()
