@@ -17,25 +17,31 @@ import           GHC.TypeLits
 import           Generics.SOP
 import qualified Generics.SOP.Type.Metadata as T
 
-deserialize :: forall a modName tyName constrName fields.
+deserialize :: forall a modName tyName constrName fields xs.
   ( Generic a
   , HasDatatypeInfo a
   , All2 FromField (Code a)
   , KnownSymbol modName
   , KnownSymbol tyName
-  , DatatypeInfoOf a ~ 'T.ADT modName tyName '[ 'T.Record constrName fields]) => RowParser a
+  , DatatypeInfoOf a ~ 'T.ADT modName tyName '[ 'T.Record constrName fields]
+  , Code a ~ '[xs]
+  , T.DemoteFieldInfos fields xs
+  ) => RowParser a
 deserialize = do
-  case datatypeInfo (Proxy :: Proxy a) of
-    ADT _modName _tyName constrInfos ->
-      case constrInfos of
-        (constr :* Nil) ->
-          case constr of
-            Record _name fields -> do
-              let f :: forall f. FromField f => FieldInfo f -> RowParser f
-                  f (FieldInfo name) = fieldByName fromField (BS.fromString name)
-              res <- fmap (to . SOP  . Z) $ hsequence (hcliftA (Proxy :: Proxy FromField) f fields)
-              setToLastCol
-              pure res
+  let f
+        :: forall f.
+           FromField f
+        => FieldInfo f -> RowParser f
+      f (FieldInfo name) = fieldByName fromField (BS.fromString name)
+  res <-
+    fmap (to . SOP . Z) $
+    hsequence
+      (hcliftA
+         (Proxy :: Proxy FromField)
+         f
+         (T.demoteFieldInfos (Proxy :: Proxy fields)))
+  setToLastCol
+  pure res
 
 fieldByName :: FieldParser a -> ByteString -> RowParser a
 fieldByName fieldP name =
