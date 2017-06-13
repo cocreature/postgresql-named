@@ -51,7 +51,6 @@ fieldByName fieldP name =
       Nothing -> error "no such column"
       Just col ->
         (lift . lift) $ do
-          liftConversion (print col)
           oid <- liftConversion (PQ.ftype rowresult col)
           val <- liftConversion (PQ.getvalue rowresult row col)
           fieldP (Field rowresult col oid) val
