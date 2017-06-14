@@ -26,7 +26,6 @@ instance Generic Foobar
 
 instance HasDatatypeInfo Foobar
 
-
 instance FromRow Foobar where
   fromRow = gFromRow
 ```
