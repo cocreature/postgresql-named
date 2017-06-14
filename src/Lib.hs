@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, DataKinds, DeriveGeneric, FlexibleContexts, GADTs, OverloadedStrings, RecordWildCards, ScopedTypeVariables, TypeOperators #-}
+{-# LANGUAGE DataKinds, FlexibleContexts, GADTs, NamedFieldPuns, ScopedTypeVariables, TypeOperators #-}
 module Lib
   ( fieldByName
   , deserialize
@@ -6,7 +6,7 @@ module Lib
 
 import           Control.Monad.Extra
 import           Control.Monad.Reader
-import           Control.Monad.State
+import           Control.Monad.State.Strict
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.UTF8 as BS
 import qualified Database.PostgreSQL.LibPQ as PQ
@@ -28,10 +28,7 @@ deserialize :: forall a modName tyName constrName fields xs.
   , T.DemoteFieldInfos fields xs
   ) => RowParser a
 deserialize = do
-  let f
-        :: forall f.
-           FromField f
-        => FieldInfo f -> RowParser f
+  let f :: forall f. FromField f => FieldInfo f -> RowParser f
       f (FieldInfo name) = fieldByName fromField (BS.fromString name)
   res <-
     fmap (to . SOP . Z) $
@@ -43,13 +40,16 @@ deserialize = do
   setToLastCol
   pure res
 
+liftIO' :: IO a -> ReaderT Row (StateT PQ.Column Conversion) a
+liftIO' = lift . lift . liftConversion
+
 fieldByName :: FieldParser a -> ByteString -> RowParser a
 fieldByName fieldP name =
   RP $ do
-    Row {..} <- ask
-    ncols <- lift (lift (liftConversion (PQ.nfields rowresult)))
+    Row {rowresult, row} <- ask
+    ncols <- liftIO' (PQ.nfields rowresult)
     matchingCol <-
-      (lift . lift . liftConversion) $
+      liftIO' $
       findM
         (\col -> (Just name ==) <$> PQ.fname rowresult col)
         [PQ.Col 0 .. ncols - 1]
@@ -64,6 +64,6 @@ fieldByName fieldP name =
 setToLastCol :: RowParser ()
 setToLastCol =
   RP $ do
-    Row {..} <- ask
-    ncols <- (lift . lift . liftConversion) (PQ.nfields rowresult)
+    Row {rowresult} <- ask
+    ncols <- liftIO' (PQ.nfields rowresult)
     put ncols
