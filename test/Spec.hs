@@ -22,7 +22,7 @@ instance HasDatatypeInfo Foobar
 
 
 instance FromRow Foobar where
-  fromRow = deserialize
+  fromRow = gFromRow
 
 withDatabaseConnection :: (Connection -> IO ()) -> IO ()
 withDatabaseConnection =
