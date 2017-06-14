@@ -7,8 +7,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 module Database.PostgreSQL.Simple.FromRow.Named
-  ( fieldByName
-  , deserialize
+  ( fieldByNameWith
+  , fieldByName
+  , gFromRow
   , NoSuchColumn(..)
   ) where
 
@@ -31,11 +32,16 @@ import qualified Generics.SOP.Type.Metadata as T
 -- the names of columns and record fields. Currently the complexity is /O(n^2)/ where n is the
 -- number of record fields.
 --
+-- /Note:/ Currently this will silently throw away fields when the row
+-- has more column than the record has fields. This is considered a
+-- bug and will change in future versions so do not rely on this
+-- behavior.
+--
 -- This is intended to be used as the implementation of 'fromRow'.
 --
 -- Throws 'NoSuchColumn' if there is a field for which there is no
 -- column with the same name.
-deserialize :: forall a modName tyName constrName fields xs.
+gFromRow :: forall a modName tyName constrName fields xs.
   ( Generic a
   , HasDatatypeInfo a
   , All2 FromField (Code a)
@@ -45,9 +51,9 @@ deserialize :: forall a modName tyName constrName fields xs.
   , Code a ~ '[xs]
   , T.DemoteFieldInfos fields xs
   ) => RowParser a
-deserialize = do
+gFromRow = do
   let f :: forall f. FromField f => FieldInfo f -> RowParser f
-      f (FieldInfo name) = fieldByName fromField (BS.fromString name)
+      f (FieldInfo name) = fieldByName (BS.fromString name)
   res <-
     fmap (to . SOP . Z) $
     hsequence
@@ -73,8 +79,8 @@ instance Exception NoSuchColumn where
 -- fields in the current row (starting at the beginning not the
 -- current position) and tries to deserialize the first field with a
 -- matching column name.
-fieldByName :: FieldParser a -> ByteString {- ^ column name to look for -} -> RowParser a
-fieldByName fieldP name =
+fieldByNameWith :: FieldParser a -> ByteString {- ^ column name to look for -} -> RowParser a
+fieldByNameWith fieldP name =
   RP $ do
     Row {rowresult, row} <- ask
     ncols <- liftIO' (PQ.nfields rowresult)
@@ -90,6 +96,12 @@ fieldByName fieldP name =
           oid <- liftConversion (PQ.ftype rowresult col)
           val <- liftConversion (PQ.getvalue rowresult row col)
           fieldP (Field rowresult col oid) val
+
+-- | This is a wrapper around 'fieldByNameWith' that gets the
+-- 'FieldParser' via the typeclass instance. Take a look at the docs
+-- for 'fieldByNameWith' for the details of this function.
+fieldByName :: FromField a => ByteString {- ^ column name to look for -} -> RowParser a
+fieldByName = fieldByNameWith fromField
 
 setToLastCol :: RowParser ()
 setToLastCol =
