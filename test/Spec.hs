@@ -41,3 +41,5 @@ main =
         it "deserializes (bar, foo) correctly" $ \conn -> do
           query_ conn "select 1 as bar, 'abc'::text as foo" `shouldReturn`
             [Foobar "abc" 1]
+        it "throws NoSuchColumn" $ \conn -> do
+          (query_ conn "select 1" :: IO [Foobar]) `shouldThrow` (==NoSuchColumn "foo")
