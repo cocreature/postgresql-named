@@ -4,8 +4,26 @@ Library for deserializing rows in `postgresql-simple` (or any other
 library that uses `FromRow`) based on column names instead of the
 positions of columns.
 
-## Status
+## Example
 
-Currently, this is highly experimental and mostly to see if this is
-possible at all. I might turn it into a decent library at some point
-but for now I don’t recommend to use it.
+```haskell
+{-# LANGUAGE DeriveGeneric #-}
+import           Database.PostgreSQL.Simple.FromRow
+import           Database.PostgreSQL.Simple.FromRow.Named
+import qualified GHC.Generics as GHC
+import           Generics.SOP
+
+data Foobar = Foobar
+  { foo :: !String
+  , bar :: !Int
+  } deriving (Show, Eq, Ord, GHC.Generic)
+
+
+instance Generic Foobar
+
+instance HasDatatypeInfo Foobar
+
+
+instance FromRow Foobar where
+  fromRow = deserialize
+```
