@@ -32,7 +32,7 @@ test-suite postgresql-named-test
   main-is:             Spec.hs
   build-depends:       base
                      , generics-sop
-                     , hspec
+                     , hspec >= 2.4 && < 2.5
                      , postgresql-named
                      , postgresql-simple
   ghc-options:         -Wall -threaded -rtsopts
