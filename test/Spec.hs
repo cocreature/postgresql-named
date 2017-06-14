@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric, OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 import           Test.Hspec
 
 import           Control.Exception
@@ -6,7 +7,8 @@ import           Database.PostgreSQL.Simple
 import           Database.PostgreSQL.Simple.FromRow
 import qualified GHC.Generics as GHC
 import           Generics.SOP
-import           Lib
+
+import           Database.PostgreSQL.Simple.FromRow.Named
 
 data Foobar = Foobar
   { foo :: !String

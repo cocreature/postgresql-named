@@ -1,5 +1,5 @@
 {-# LANGUAGE DataKinds, FlexibleContexts, GADTs, NamedFieldPuns, ScopedTypeVariables, TypeOperators #-}
-module Lib
+module Database.PostgreSQL.Simple.FromRow.Named
   ( fieldByName
   , deserialize
   ) where
