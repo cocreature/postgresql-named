@@ -1,5 +1,7 @@
 name:                postgresql-named
 version:             0.1.0
+synopsis:            Generic deserialization of PostgreSQL rows based on column names
+description:         See README.md
 homepage:            https://github.com/cocreature/postgresql-named#readme
 license:             BSD3
 license-file:        LICENSE
