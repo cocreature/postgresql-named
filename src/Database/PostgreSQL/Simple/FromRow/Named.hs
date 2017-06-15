@@ -1,3 +1,18 @@
+{-|
+Module      : Database.PostgreSQL.Simple.FromRow.Named
+Description : Generic implementation of FromRow based on record field names.
+Copyright   : (c) Moritz Kiefer, 2017
+License     : BSD-3
+Maintainer  : moritz.kiefer@purelyfunctional.org
+
+This module provides the machinery for implementing instances of
+'FromRow' that deserialize based on the names of columns instead of
+the positions of individual fields. This is particularly convenient
+when deserializing to a Haskell record and you want the field names
+and column names to match up. In this case 'gFromRow' can be used as
+a generic implementation of 'fromRow'.
+-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveDataTypeable #-}
@@ -5,12 +20,18 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE ViewPatterns #-}
 module Database.PostgreSQL.Simple.FromRow.Named
-  ( fieldByNameWith
+  ( -- * Generic implementation of FromRow
+    gFromRow
+    -- * Deserialize individual fields based on their name
   , fieldByName
-  , gFromRow
+  , fieldByNameWith
+    -- * Exception types
   , NoSuchColumn(..)
+  , TooManyColumns(..)
   ) where
 
 import           Control.Exception
@@ -28,19 +49,26 @@ import           GHC.TypeLits
 import           Generics.SOP
 import qualified Generics.SOP.Type.Metadata as T
 
+npLength :: NP f xs -> Word
+npLength xs = go 0 xs
+  where
+    go :: Word -> NP f xs -> Word
+    go !i Nil = i
+    go !i (_ :* xs') = go (i + 1) xs'
+
 -- | Deserialize a type with a single record constructor by matching
 -- the names of columns and record fields. Currently the complexity is /O(n^2)/ where n is the
 -- number of record fields.
 --
--- /Note:/ Currently this will silently throw away fields when the row
--- has more column than the record has fields. This is considered a
--- bug and will change in future versions so do not rely on this
--- behavior.
---
 -- This is intended to be used as the implementation of 'fromRow'.
 --
--- Throws 'NoSuchColumn' if there is a field for which there is no
--- column with the same name.
+-- Throws
+--
+--   * 'NoSuchColumn' if there is a field for which there is no
+--     column with the same name.
+--
+--   * 'TooManyColumns' if there more columns (counting both named
+--     and unnamed columns) than record fields.
 gFromRow :: forall a modName tyName constrName fields xs.
   ( Generic a
   , HasDatatypeInfo a
@@ -54,6 +82,9 @@ gFromRow :: forall a modName tyName constrName fields xs.
 gFromRow = do
   let f :: forall f. FromField f => FieldInfo f -> RowParser f
       f (FieldInfo name) = fieldByName (BS.fromString name)
+      fieldInfos :: NP FieldInfo xs
+      fieldInfos = T.demoteFieldInfos (Proxy @fields)
+  guardMatchingColumnNumber (npLength fieldInfos)
   res <-
     fmap (to . SOP . Z) $
     hsequence
@@ -64,6 +95,15 @@ gFromRow = do
   setToLastCol
   pure res
 
+guardMatchingColumnNumber :: Word -> RowParser ()
+guardMatchingColumnNumber numFields =
+  RP $ do
+    Row {rowresult} <- ask
+    PQ.Col (fromIntegral -> numCols) <- liftIO' (PQ.nfields rowresult)
+    when
+      (numCols /= numFields)
+      ((lift . lift . conversionError) (TooManyColumns numFields numCols))
+
 liftIO' :: IO a -> ReaderT Row (StateT PQ.Column Conversion) a
 liftIO' = lift . lift . liftConversion
 
@@ -72,7 +112,18 @@ data NoSuchColumn =
   NoSuchColumn ByteString
   deriving (Show, Eq, Ord, Typeable)
 
-instance Exception NoSuchColumn where
+instance Exception NoSuchColumn
+
+-- | Thrown by 'gFromRow' when trying to deserialize to a record that
+-- has less fields than the current row has columns (counting both
+-- named and unnamed columns).
+data TooManyColumns = TooManyColumns
+  { numRecordFields :: !Word -- ^ The expected number of record fields.
+  , numColumns :: !Word -- ^ The number of columns in the row that should have been deserialized.
+  } deriving (Show, Eq, Ord, Typeable)
+
+instance Exception TooManyColumns
+
 
 -- | This is similar to 'fieldWith' but instead of trying to
 -- deserialize the field at the current position it goes through all
