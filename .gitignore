@@ -4,3 +4,6 @@ dist/
 *~
 cabal.project.local
 .ghc.environment.*
+cabal.sandbox.config
+.dir-locals.el
+.cabal-sandbox/
