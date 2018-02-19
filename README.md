@@ -1,7 +1,7 @@
 # postgresql-named
 
-[![Travis](https://img.shields.io/travis/cocreature/postgresql-named.svg)]()
-[![Hackage](https://img.shields.io/hackage/v/postgresql-named.svg)]()
+[![Travis](https://img.shields.io/travis/cocreature/postgresql-named.svg)](https://travis-ci.org/cocreature/postgresql-named)
+[![Hackage](https://img.shields.io/hackage/v/postgresql-named.svg)](https://hackage.haskell.org/package/postgresql-named)
 
 Library for deserializing rows in `postgresql-simple` (or any other
 library that uses `FromRow`) based on column names instead of the
